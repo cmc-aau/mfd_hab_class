@@ -4,7 +4,7 @@ Repo for the classification of the MFD Ontology habitats in the [Microflora Dani
 
 Please download the input data from the [Zenodo repo](https://zenodo.org/records/12605769) in the `/data` folder and amend the `/config/hab_class.yaml` file as indicated.
 
-The script is meant to run with a SLURM system and requires mamba and conda but installs all the other required packages via mamba. The precise partition names or the resource requirmeent might need to be adjusted in `config/config.yaml` and in the ".rule" files in `scripts/scripts_python/rules/`.
+The script is meant to run with a SLURM system and requires mamba and conda but installs all the other required packages via mamba. The precise partition names or the resource requirmeent might need to be adjusted in `config/config.yaml` and in the `.rule` files in `scripts/scripts_python/rules/`.
 It will aslo try to detect automatically the location where it is. If this fails please amend the file `scripts/scripts_bash/hab_class.sh` as indicated there.
 
 
