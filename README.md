@@ -10,7 +10,7 @@ It will aslo try to detect automatically the location where it is. If this fails
 
 The results from the paper can be reproduced by running:
 ```
-bash scripts/scripts_bash/hab_class.sh
+sbatch scripts/scripts_bash/hab_class.sh
 ```
 
 The results will be collected in the `/results` folder.
