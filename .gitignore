@@ -1,0 +1,26 @@
+# Files to be ignored
+
+## Stdout and logs from SLURM runs
+*.err
+*.out
+log/*
+
+## Legacy scripts
+scripts/scripts_R/hab_classifier.R
+analysis_legacy/*
+analysis/input/micro_vars_legacy/*
+analysis/output_svm_legacy/*
+config/cluster_hab_class.yaml
+
+## Snakemake repo
+.snakemake/*
+
+## Envs builds
+envs/*
+!envs/snakemake.yml
+!envs/hab_class_r_packages.yml
+
+## Results folder, it will be populated running the scripts
+
+analysis/input/*
+analysis/output/*

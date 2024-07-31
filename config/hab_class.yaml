@@ -1,0 +1,12 @@
+# Input for microbial table formatting
+#micro_input: "/projects/microflora_danica/sub_projects/mfd_the_paper/analysis/format_data/output/2024-03-07_arcbac-rarefaction-rel.csv" path on the cmc cluster
+micro_input: "/PATH_TO_FILE/2024-03-07_arcbac-rarefaction-rel.csv" # Download the file from https://zenodo.org/records/12605769
+
+# Parameters for fitlering
+filter_n_samples: 25
+filter_threshold: 0.7
+
+# Parameters for habitat classification
+hab_n_samples: 50
+
+

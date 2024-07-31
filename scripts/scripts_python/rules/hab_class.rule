@@ -1,0 +1,26 @@
+rule hab_class_cv:
+    input:
+        micro_table = output_folder + "/input/micro_vars/reduced_{tax_level}.csv",
+        meta = input_folder + "/2024-02-13_mfd_db.xlsx",
+    output:
+        model_object = output_folder + "/output/model_{tax_level}_{hab_level}.RData",
+    params:
+        n_samples = config["hab_n_samples"],
+    conda:
+        env_folder + "/hab_class_r_packages.yml"
+    resources:
+        runtime = "2-00:00:00",
+        mem_mb = "100G",
+        partition = "general",
+        threads = 25,
+    threads:
+        25
+    shell:
+        """
+        scripts/scripts_R/hab_rand_forest_classifier.R --input_table {input.micro_table} --out_object {output.model_object} --meta {input.meta} --class {wildcards.hab_level} --n_obs {params.n_samples} --threads {threads}
+        """
+
+
+
+
+

@@ -1,0 +1,24 @@
+import re
+import glob
+
+input_folder = os.environ['INPUT_DIR']
+output_folder = os.environ['OUTPUT_DIR']
+env_folder = os.environ['ENV_DIR']
+script_folder = os.environ['SCRIPTS_DIR']
+download_folder = os.environ['DOWNLOAD_DIR']
+
+
+include: "rules/micro_format.rule"
+include: "rules/hab_class.rule"
+
+tax_levels=["genus", "family", "order", "class", "phylum"]
+hab_levels=["Sampletype", "Areatype", "MFDO1", "MFDO2", "MFDO3"]
+
+rule all:
+    input:
+        expand(output_folder + "/input/micro_vars/reduced_{tax_level}.csv", tax_level=tax_levels),
+        expand(output_folder + "/output/model_{tax_level}_{hab_level}.RData", tax_level=tax_levels, hab_level=hab_levels)
+    resources:
+        runtime = "00-01:00:00",
+
+
