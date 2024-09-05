@@ -1,0 +1,170 @@
+---
+title: "False negative analysis"
+author: "F. Delogu"
+date: "as.Date(now())"
+output:
+  html_document:
+---
+
+# Setup
+
+## Load libraries
+```{r load libraries, message=F, warning=F}
+library(tidyverse)
+library(tidymodels)
+library(gridExtra)
+library(ggpubr)
+library(wesanderson)
+
+options(width = 500)
+```
+
+## Set the environment
+```{r setup}
+options(stringsAsFactors = F, gsubfn.engine = "R")
+
+Sys.setenv("LANGUAGE"="En")
+
+wd <- getwd()
+
+data.path <- paste0(wd, '/../../data')
+results.path <- paste0(wd, '/../../results')
+```
+
+## Load data
+```{r load data}
+load(paste0(data.path, "/model_order_MFDO1.RData"))
+```
+
+
+## FN dist function
+```{r FN dist function}
+get_FN_dists <- function(conf, hab){
+
+  # Pivot the confusion matrix to long format
+  conf_long <- lapply(1:length(conf), function(x){
+    conf[[x]][[1]][,colnames(conf[[x]][[1]])%in%c(hab)]
+  }) %>%
+    bind_rows() %>%
+    pivot_longer(everything(), names_to = "MFDO1", values_to = "value") %>%
+    mutate(Class = if_else(MFDO1 == hab, "TP", "FN"))
+      
+  # Compute the number of FN for class "hab" in each split and iteration
+  FN_array <- lapply(1:length(conf), function(x){
+    sum(conf[[x]][[1]][!colnames(conf[[x]][[1]])%in%c(hab),colnames(conf[[x]][[1]])%in%c(hab)])
+  }) %>%
+    unlist()
+  
+  # Compute the sample size for each class different than "hab" in each split and iteration
+  background_dist <- lapply(1:length(conf), function(x){
+    colSums(conf[[x]][[1]][, !colnames(conf[[x]][[1]])%in%c(hab)])
+  }) %>%
+    bind_rows()
+  
+  # Total number of samples different than "hab" in each split and iteration (the splits are almost the same but exactly)
+  split_sum <- rowSums(background_dist)
+  
+  background_perc <- background_dist / split_sum
+  background_perc %>% rowSums()
+  
+  # Scale the FN for class "hab" by the distribution of samples in the classes different than "hab" to make the background
+  background_scaled <- t(t(background_perc)*FN_array)
+  
+  # Pivot the background to long format
+  background_long <- background_scaled %>%
+    as.data.frame() %>%
+    pivot_longer(everything(), names_to = "MFDO1", values_to = "value") %>%
+    mutate(Type = "Expected")
+
+  # Put the "Expected" and "Observed" distribution in one data frame
+  to_return <- conf_long %>%
+    filter(Class == "FN") %>%
+    select(-Class) %>%
+    mutate(Type = "Observed") %>%
+    rbind(background_long) %>%
+    mutate(hab_class = hab)
+  
+  return(to_return)
+  
+}
+```
+
+## Explore data
+```{r Explore data}
+library(rstatix)
+library(ggpmisc)
+
+rand.forest.res <- collect_predictions(rand.forest.fit)
+conf <- rand.forest.res %>%
+  group_by(id, id2) %>%
+  conf_mat(truth = "hab_class", estimate = ".pred_class") %>%
+  pull(conf_mat)
+
+FN_dist <- lapply(colnames(conf[[1]][[1]]), function(x){
+  get_FN_dists(conf, x)
+}) %>%
+  bind_rows()
+
+
+
+TP.plot <- conf_long %>%
+  filter(Class == "TP") %>%
+  ggplot(aes(x = MFDO1, y = value)) +
+  geom_boxplot() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+
+
+FN.plot <- FN_dist %>%
+  ggplot(aes(x = MFDO1, y = value, fill = Type)) +
+  geom_boxplot() +
+  stat_compare_means(method = "t.test",
+                     label = "p.signif",
+                     hide.ns = T,
+                     symnum.args = list(cutpoints = c(0, 0.001, 0.01, 0.05, Inf),
+                                         symbols = c("***", "**", "*", "ns")),
+                     paired = T) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1)) +
+  facet_wrap(hab_class ~ .)
+
+# Shapiro test
+FN_dist %>%
+  group_by(MFDO1, Type, hab_class) %>%
+  shapiro_test(., value)
+
+# Select comparisons
+pwc <- FN_dist %>%
+  group_by(MFDO1, hab_class) %>%
+  rstatix::t_test(., value ~ Type, paired = T) %>%
+  #add_xy_position() %>%
+  mutate(p.symbol = case_when(p < 0.001 ~ "***",
+                              p < 0.01 ~ "**",
+                              p >= 0.01 & p < 0.05 ~ "*",
+                              .default = ""),
+         y = -5,
+         sign.stat = sign(statistic)) %>%
+  filter(!is.nan(sign.stat)) %>%
+  mutate(sign.stat = if_else(sign.stat==-1, "Obs > Exp", "Obs < Exp"))
+
+pwc
+
+FN.plot <- FN_dist %>%
+  ggplot(aes(x = MFDO1, y = value, color = Type)) +
+  geom_boxplot(aes(fill = Type), color = "black") +
+  stat_pvalue_manual(data = pwc,
+                     x = "MFDO1",
+                     label = "p.symbol",
+                     y.position = "y",
+                     color = "sign.stat",
+                     size = 2) +
+  theme_classic() +
+  scale_color_manual(values = wes_palette(name = "AsteroidCity2", type = "discrete")[c(6,5)]) +
+  scale_fill_manual(values = wes_palette(name = "AsteroidCity2", type = "discrete")[c(6,5)]) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  facet_wrap(hab_class ~ .) +
+  labs(x = "MFDO1 habitat", y = "False Negative")
+
+ggsave(FN.plot, filename = paste0(results.path, "/FN.png"), width = 13, height = 13, dpi = "retina")
+ggsave(FN.plot, filename = paste0(results.path, "/FN.svg"), width = 13, height = 13, dpi = "retina")
+```
