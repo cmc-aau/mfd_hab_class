@@ -1,0 +1,489 @@
+---
+title: ""
+author: "F. Delogu"
+date: "as.Date(now())"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+    toc_collapsed: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+params:
+---
+
+# Setup
+
+## Load libraries
+```{r load libraries, message=F, warning=F}
+library(tidyverse)
+library(knitr)
+library(openxlsx)
+library(ggraph)
+library(igraph)
+library(gtools)
+library(treedataverse)
+library(dendroextras)
+library(ggvenn)
+library(ggtreeExtra)
+library(ggnewscale)
+library(ggsankey)
+library(wesanderson)
+library(ape)
+library(gridExtra)
+library(ggpubr)
+
+options(width = 500)
+```
+
+## Set the environment
+```{r setup}
+options(stringsAsFactors = F, gsubfn.engine = "R")
+
+Sys.setenv("LANGUAGE"="En")
+
+wd <- getwd()
+
+data.path <- paste0(wd, '/../../data')
+results.path <- paste0(wd, '/../../results')
+
+```
+
+## Load data
+
+```{r Load data}
+mfd_ontology <- read.xlsx(paste0(data.path, "/2023-12-21_mfd-habitat-ontology.xlsx"), sheet = 1)
+
+auc.df <- data.table::fread(paste0(data.path, "/auc.csv"), sep = "\t")
+
+aucs.df <- data.table::fread(paste0(data.path, "/aucs.csv"), sep = "\t")
+
+tpr.df <- data.table::fread(paste0(data.path, "/tpr.csv"), sep = "\t")
+
+mfd_db <- read.xlsx(paste0(data.path, "/2024-02-13_mfd_db.xlsx"), sheet = 1)
+
+var_imp <- data.table::fread(paste0(data.path, "/var_importance.csv"), sep = "\t")
+
+order.df <- data.table::fread(paste0(data.path, "/reduced_order.csv"), sep = ",")
+colnames(order.df)[1] <- "fieldsample_barcode"
+
+```
+
+# Color
+
+## Palette
+## Color
+```{r color}
+library(wesanderson)
+
+## Ontology palettes
+sediment.palette <- colorRampPalette(c(wes_palette("IsleofDogs2")[3], wes_palette("FantasticFox1")[1]))
+plot(rep(1, 5), col = sediment.palette(5), pch = 19, cex = 3)
+soil.palette <- colorRampPalette(c(wes_palette("AsteroidCity1")[4], wes_palette("AsteroidCity1")[1]))
+plot(rep(1, 9), col = soil.palette(9), pch = 19, cex = 3)
+water.palette <- colorRampPalette(c(wes_palette("Darjeeling2")[2], wes_palette("Zissou1")[2]))
+plot(rep(1, 4), col = water.palette(4), pch = 19, cex = 3)
+
+## Sampletype palette
+
+sampletype.palette <- c(soil.palette(1), sediment.palette(1), water.palette(1))
+names(sampletype.palette) <- c("Soil", "Sediment", "Water")
+
+sampletype.palette
+plot(rep(1, 3), col = sampletype.palette, pch = 19, cex = 3)
+
+
+mfdo1 <- mfd_db %>%
+  select(mfd_sampletype:mfd_hab1) %>%
+  filter(!is.na(mfd_hab1)) %>%
+  mutate(across(mfd_hab1, ~str_replace(., "Sclerophyllous scrub", "Temperate heath and scrub"))) %>%
+  distinct() %>%
+  mutate(complex = str_c(mfd_sampletype, mfd_areatype, mfd_hab1, sep = ", ")) %>%
+  filter(!complex %in% c("Water, Subterranean, Freshwater",
+                         "Water, Urban, Sandfilter",
+                         "Soil, Urban, Other",
+                         "Sediment, Urban, Other",
+                         "Soil, Urban, Roadside",
+                         "Soil, Subterranean, Urban")) %>%
+  mutate(across(mfd_sampletype, ~factor(., levels = c("Soil", "Sediment", "Water"))),
+         across(mfd_areatype, ~factor(., levels = c("Natural", "Subterranean", "Agriculture", "Urban")))) %>%
+  arrange(mfd_sampletype, mfd_areatype, mfd_hab1)
+
+mfdo1.palette <- c(soil.palette(9), sediment.palette(5), water.palette(4))
+names(mfdo1.palette) <- mfdo1 %>% pull(complex)
+
+mfdo1.palette
+plot(rep(1, 18), col = mfdo1.palette, pch = 19, cex = 3)
+```
+
+## MfD static ontology
+```{r MfD static ontology}
+dd_mfd1 <- mfd_ontology %>%
+  mutate(lvl1 = if_else(is.na(mfd_sampletype), NA, mfd_sampletype),
+         lvl2 = if_else(is.na(mfd_areatype), NA, paste0(mfd_sampletype, "; ", mfd_areatype)),
+         lvl3 = if_else(is.na(mfd_hab1_code), NA, paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab1_code)),
+         lvl4 = if_else(is.na(mfd_hab2_code), NA, paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab2_code)),
+         lvl5 = if_else(is.na(mfd_hab3_code), NA, paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab3_code)))
+
+dd_mfd <- mfd_ontology %>%
+  mutate(lvl1 = if_else(is.na(mfd_sampletype), NA, mfd_sampletype),
+         lvl2 = if_else(is.na(mfd_areatype), NA, paste0(mfd_sampletype, "; ", mfd_areatype)),
+         lvl3 = if_else(is.na(mfd_hab1_code), NA, paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab1_code)),
+         lvl4 = if_else(is.na(mfd_hab2_code), NA, paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab2_code)),
+         lvl5 = if_else(is.na(mfd_hab3_code), NA, paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab3_code)))
+
+
+mfd_recast <- rbind((data.frame(Code=dd_mfd$lvl1,
+                                Label=dd_mfd$lvl1,
+                                Natura2000=NA,
+                                EUNIS=NA,
+                                EMPO="Free-living",
+                                mfd_lvl = 1) %>%
+                       distinct()),
+                    (data.frame(Code=dd_mfd$lvl2,
+                                Label=dd_mfd$lvl2,
+                                Natura2000=NA,
+                                EUNIS=NA,
+                                EMPO="Free-living",
+                                mfd_lvl = 2) %>%
+                       distinct()),
+                    (data.frame(Code=dd_mfd$lvl3[!is.na(dd_mfd$mfd_hab1)&is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],
+                                Label=paste0(dd_mfd$mfd_sampletype[!is.na(dd_mfd$mfd_hab1)&is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)], "; ", 
+                                             dd_mfd$mfd_areatype[!is.na(dd_mfd$mfd_hab1)&is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)], "; ",
+                                             dd_mfd$mfd_hab1[!is.na(dd_mfd$mfd_hab1)&is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)]),
+                                Natura2000=dd_mfd$Natura2000[!is.na(dd_mfd$mfd_hab1)&is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],
+                                EUNIS=dd_mfd$EUNIS[!is.na(dd_mfd$mfd_hab1)&is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],
+                                EMPO=dd_mfd$EMPO[!is.na(dd_mfd$mfd_hab1)&is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],
+                                mfd_lvl = 3) %>%
+                       distinct()),
+                    (data.frame(Code=dd_mfd$lvl4[!is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],
+                                Label=paste0(dd_mfd$mfd_sampletype[!is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)], "; ",
+                                             dd_mfd$mfd_areatype[!is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)], "; ",
+                                             dd_mfd$mfd_hab1[!is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],  "; ",
+                                             dd_mfd$mfd_hab2[!is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)]),
+                                Natura2000=dd_mfd$Natura2000[!is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],
+                                EUNIS=dd_mfd$EUNIS[!is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],
+                                EMPO=dd_mfd$EMPO[!is.na(dd_mfd$mfd_hab2)&is.na(dd_mfd$mfd_hab3)],
+                                mfd_lvl = 4) %>%
+                       distinct()),
+                    (data.frame(Code=dd_mfd$lvl5[!is.na(dd_mfd$mfd_hab3)],
+                                Label=paste0(dd_mfd$mfd_sampletype[!is.na(dd_mfd$mfd_hab3)], "; ",
+                                             dd_mfd$mfd_areatype[!is.na(dd_mfd$mfd_hab3)], "; ",
+                                             dd_mfd$mfd_hab1[!is.na(dd_mfd$mfd_hab3)], "; ",
+                                             dd_mfd$mfd_hab2[!is.na(dd_mfd$mfd_hab3)], "; ",
+                                             dd_mfd$mfd_hab3[!is.na(dd_mfd$mfd_hab3)]), 
+                                Natura2000=dd_mfd$Natura2000[!is.na(dd_mfd$mfd_hab3)],
+                                EUNIS=dd_mfd$EUNIS[!is.na(dd_mfd$mfd_hab3)],
+                                EMPO=dd_mfd$EMPO[!is.na(dd_mfd$mfd_hab3)],
+                                mfd_lvl = 5) %>%
+                       distinct()))
+
+edges_0_1 <- dd_mfd1 %>%
+  mutate(lvl0 = "root") %>%
+  select(lvl0, lvl1) %>%
+  filter(!is.na(lvl1)) %>%
+  unique() %>%
+  rename(from=lvl0, to=lvl1)
+
+edges_1_2 <- dd_mfd1 %>%
+  select(lvl1, lvl2) %>%
+  filter(lvl1!=lvl2 & !is.na(lvl1) & !is.na(lvl2)) %>%
+  unique() %>%
+  rename(from=lvl1, to=lvl2)
+  
+edges_2_3 <- dd_mfd1 %>%
+  select(lvl2, lvl3) %>%
+  filter(lvl2!=lvl3 & !is.na(lvl2) & !is.na(lvl3)) %>%
+  unique() %>%
+  rename(from=lvl2, to=lvl3)
+
+edges_3_4 <- dd_mfd1 %>%
+  select(lvl3, lvl4) %>%
+  filter(lvl3!=lvl4 & !is.na(lvl3) & !is.na(lvl4)) %>%
+  unique() %>%
+  rename(from=lvl3, to=lvl4)
+
+edges_4_5 <- dd_mfd1 %>%
+  select(lvl4, lvl5) %>%
+  filter(lvl4!=lvl5 & !is.na(lvl4) & !is.na(lvl5)) %>%
+  unique() %>%
+  rename(from=lvl4, to=lvl5)
+
+edge_list <- rbind(edges_0_1,
+                   edges_1_2,
+                   edges_2_3,
+                   edges_3_4,
+                   edges_4_5) %>%
+  as.data.frame() %>%
+  filter(to!="") %>%
+  arrange(from)
+
+graph_Data <- graph_from_data_frame(edge_list %>%
+                                       arrange(from) %>%
+                                      left_join((mfd_recast %>%
+                                                   select(Code, Label)),
+                                                by = c("to" = "Code")) %>%
+                                      filter(Label%in%tpr.df$hab_class | from == "root") %>%
+                                      select(from, to) %>%
+                                      distinct() %>%
+                                      left_join((mfd_recast %>%
+                                                   select(Code, Label)),
+                                                by = c("from" = "Code")) %>%
+                                      filter(Label%in%tpr.df$hab_class | from == "root") %>%
+                                      select(from, to) %>%
+                                      distinct())
+
+mfd.tree <- as.phylo(graph_Data) %>%
+  left_join((mfd_recast %>%
+               filter(Label %in% unique(auc.df$.level)) %>%
+  rowwise() %>%
+  mutate(metric = runif(1, min=0, max=1))),
+            by=c("label"="Code")) %>%
+  mutate(Label = if_else(label == "root", "Root", Label)) %>%
+  left_join((tpr.df %>%
+               filter(tax_level=="order") %>%
+               group_by(hab_class) %>%
+               summarise(TPR.mean = mean(TPR, na.rm = T),
+                         TPR.sd = sd(TPR))),
+            by = c("Label" = "hab_class"))
+
+p <- mfd.tree %>%
+  ggtree(ladderize = T) +
+  #geom_nodepoint(aes(size = TPR.mean, color = TPR.sd)) +
+  #geom_tippoint(aes(size = TPR.mean, color = TPR.sd)) +
+  geom_tiplab(aes(label = Label), align=F, linesize=.5, as_ylab = T) +
+  geom_label(aes(label = format(round(TPR.mean, 2), 2), fill = TPR.mean), size = 2.5) +
+  scale_fill_gradientn( colors = c("darkred", "goldenrod1", "yellow2"))
+
+p$data[, "x"] <- p$data[, "mfd_lvl"]+1
+p$data[, "x"][is.na(p$data[, "x"])] <- 1
+
+ggsave(p, filename = paste0(results.path, "/class_tpr_tree.png"), width = 10, height = 10)
+ggsave(p, filename = paste0(results.path, "/class_tpr_tree.svg"), width = 10, height = 10)
+```
+
+## Variable importance
+```{r Variabel importance}
+cutoff <- (var_imp %>%
+  filter(tax_level=="genus", hab_level=="MFDO1") %>%
+  group_by(Variable) %>%
+  summarise(Importance.median = median(Importance)) %>%
+  ungroup() %>%
+  arrange(desc(Importance.median)) %>%
+  pull(Importance.median))[20]
+
+var_imp_MFDO1.df <- var_imp %>%
+  filter(tax_level=="genus", hab_level=="MFDO1") %>%
+  group_by(Variable) %>%
+  mutate(Importance.median = median(Importance)) %>%
+  ungroup() %>%
+  filter(Importance.median >= cutoff) %>%
+  mutate(Variable = fct_reorder(Variable, desc(Importance.median)))
+  
+var_imp_MFDO1.plot <- var_imp_MFDO1.df %>%
+  ggplot(aes(x = Variable, y = Importance)) +
+  geom_jitter(alpha = 0.5) +
+  geom_boxplot(width = 0.8,
+               alpha = 0.6,
+               fill = NA,
+               outlier.size = -1) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+
+cutoff <- (var_imp %>%
+  filter(tax_level=="order", hab_level=="MFDO2") %>%
+  group_by(Variable) %>%
+  summarise(Importance.median = median(Importance)) %>%
+  ungroup() %>%
+  arrange(desc(Importance.median)) %>%
+  pull(Importance.median))[20]
+
+var_imp_MFDO2.df <- var_imp %>%
+  filter(tax_level=="order", hab_level=="MFDO2") %>%
+  group_by(Variable) %>%
+  mutate(Importance.median = median(Importance)) %>%
+  ungroup() %>%
+  filter(Importance.median >= cutoff) %>%
+  mutate(Variable = fct_reorder(Variable, desc(Importance.median)))
+
+var_imp_MFDO2.plot <- var_imp_MFDO2.df %>%
+  ggplot(aes(x = Variable, y = Importance)) +
+  geom_jitter(alpha = 0.5) +
+  geom_boxplot(width = 0.8,
+               alpha = 0.6,
+               fill = NA,
+               outlier.size = -1) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+
+cutoff <- (var_imp %>%
+  filter(tax_level=="order", hab_level=="MFDO3") %>%
+  group_by(Variable) %>%
+  summarise(Importance.median = median(Importance)) %>%
+  ungroup() %>%
+  arrange(desc(Importance.median)) %>%
+  pull(Importance.median))[20]
+
+var_imp_MFDO3.df <- var_imp %>%
+  filter(tax_level=="order", hab_level=="MFDO3") %>%
+  group_by(Variable) %>%
+  mutate(Importance.median = median(Importance)) %>%
+  ungroup() %>%
+  filter(Importance.median >= cutoff) %>%
+  mutate(Variable = fct_reorder(Variable, desc(Importance.median)))
+
+var_imp_MFDO3.plot <- var_imp_MFDO3.df %>%
+  ggplot(aes(x = Variable, y = Importance)) +
+  geom_jitter(alpha = 0.5) +
+  geom_boxplot(width = 0.8,
+               alpha = 0.6,
+               fill = NA,
+               outlier.size = -1) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+
+
+var_imp_MFDO1.plot
+ggsave(var_imp_MFDO1.plot, filename = paste0(results.path, "/var_imp_MFDO1.png"), width = 8, height = 4)
+ggsave(var_imp_MFDO1.plot, filename = paste0(results.path, "/var_imp_MFDO1.svg"), width = 8, height = 4)
+var_imp_MFDO2.plot
+ggsave(var_imp_MFDO2.plot, filename = paste0(results.path, "/var_imp_MFDO2.png"), width = 8, height = 4)
+ggsave(var_imp_MFDO2.plot, filename = paste0(results.path, "/var_imp_MFDO2.svg"), width = 8, height = 4)
+var_imp_MFDO3.plot
+ggsave(var_imp_MFDO3.plot, filename = paste0(results.path, "/var_imp_MFDO3.png"), width = 8, height = 4)
+ggsave(var_imp_MFDO3.plot, filename = paste0(results.path, "/var_imp_MFDO3.svg"), width = 8, height = 4)
+```
+
+## Matrics comparison
+```{r Matrics comparison}
+per.class <- bind_rows((aucs.df %>%
+                          mutate(hab_class = class) %>%
+                          select(-.estimator,
+                                 -class)),
+                       (tpr.df %>%
+                          mutate(.estimate = TPR,
+                                 .metric = "TPR") %>%
+                          select(-TPR))) %>%
+  pivot_wider(names_from = .metric, values_from = .estimate) %>%
+  unchop(everything()) %>%
+  distinct()
+
+tpr_pr_comparison.plot <- per.class %>%
+  #filter(tax_level == "order") %>%
+  ggplot(aes(x = TPR, y = pr_auc, group = tax_level, color = tax_level)) +
+  geom_point(alpha = 0.25) +
+  geom_smooth(formula = y~x, method = "lm") +
+  facet_wrap(factor(hab_level, levels=c("Sampletype", "Areatype", "MFDO1", "MFDO2", "MFDO3"))~hab_class, ncol = 14) +
+  theme_bw() +
+  theme(aspect.ratio = 1)
+
+#tpr_pr_comparison.plot
+ggsave(tpr_pr_comparison.plot, filename = paste0(results.path, "/tpr_pr_comparison.png"), width = 28, height = 20)
+#ggsave(tpr_pr_comparison.plot, filename = paste0(results.path, "/tpr_pr_comparison.svg"), width = 24, height = 20)
+```
+
+## MfD tree pr_auc
+```{r MfD tree pr_auc}
+
+graph_Data <- graph_from_data_frame(edge_list %>%
+                                       arrange(from) %>%
+                                      left_join((mfd_recast %>%
+                                                   select(Code, Label)),
+                                                by = c("to" = "Code")) %>%
+                                      filter(Label%in%per.class$hab_class | from == "root") %>%
+                                      select(from, to) %>%
+                                      distinct() %>%
+                                      left_join((mfd_recast %>%
+                                                   select(Code, Label)),
+                                                by = c("from" = "Code")) %>%
+                                      filter(Label%in%per.class$hab_class | from == "root") %>%
+                                      select(from, to) %>%
+                                      distinct())
+
+mfd.tree <- as.phylo(graph_Data) %>%
+  left_join((mfd_recast %>%
+               filter(Label %in% unique(per.class$hab_class)) %>%
+  rowwise() %>%
+  mutate(metric = runif(1, min=0, max=1))),
+            by=c("label"="Code")) %>%
+  mutate(Label = if_else(label == "root", "Root", Label)) %>%
+  left_join((per.class %>%
+               filter(tax_level=="order") %>%
+               group_by(hab_class) %>%
+               summarise(pr_auc.mean = mean(pr_auc, na.rm = T),
+                         pr_auc.sd = sd(pr_auc))),
+            by = c("Label" = "hab_class"))
+
+p <- mfd.tree %>%
+  ggtree(ladderize = T) +
+  #geom_nodepoint(aes(size = TPR.mean, color = TPR.sd)) +
+  #geom_tippoint(aes(size = TPR.mean, color = TPR.sd)) +
+  geom_tiplab(aes(label = Label), align=F, linesize=.5, as_ylab = T) +
+  geom_label(aes(label = format(round(pr_auc.mean, 2), 2), fill = pr_auc.mean), size = 2.5) +
+  scale_fill_gradientn( colors = c("darkred", "goldenrod1", "yellow2"))
+
+p$data[, "x"] <- p$data[, "mfd_lvl"]+1
+p$data[, "x"][is.na(p$data[, "x"])] <- 1
+
+ggsave(p, filename = paste0(results.path, "/class_pr_auc_tree.png"), width = 10, height = 10)
+ggsave(p, filename = paste0(results.path, "/class_pr_auc_tree.svg"), width = 10, height = 10)
+
+```
+
+## Variable importance heatmaps
+```{r Variable importance heatmaps}
+mfd_db %>%
+  mutate(MFDO3=paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab1, "; ", mfd_hab2, "; ", mfd_hab3)) %>%
+  select(fieldsample_barcode, MFDO3) %>%
+  filter(MFDO3 %in% p$data$Label) %>%
+  inner_join((as.data.frame(order.df)[, c("fieldsample_barcode", levels(var_imp_MFDO3.df$Variable))]),
+             by = "fieldsample_barcode") %>%
+  pivot_longer(names_to = "taxa", values_to = "value", -c(fieldsample_barcode, MFDO3)) %>%
+  group_by(MFDO3, taxa) %>%
+  summarise(value=median(value)) %>%
+  ggplot(aes(x=factor(taxa, levels=levels(var_imp_MFDO3.df$Variable)), y=MFDO3, fill=value)) +
+  geom_tile(lwd = .25,
+            linetype = 1,
+            color = "black") +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1),
+        axis.ticks = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+order_terminus_heatmap.plot <- mfd_db %>%
+  mutate(MFDO2=paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab1, "; ", mfd_hab2),
+         MFDO3=paste0(mfd_sampletype, "; ", mfd_areatype, "; ", mfd_hab1, "; ", mfd_hab2, "; ", mfd_hab3)) %>%
+  select(fieldsample_barcode, MFDO2, MFDO3) %>%
+  #mutate(MFDO_terminus = if_else(endsWith(MFDO3, "NA"), MFDO2, MFDO3)) %>%
+  mutate(MFDO_terminus = if_else(MFDO3%in%p$data$Label[p$data$isTip], MFDO3, MFDO2)) %>%
+  select(fieldsample_barcode, MFDO_terminus) %>%
+  filter(MFDO_terminus %in% p$data$Label[p$data$isTip]) %>%
+  inner_join((as.data.frame(order.df)[, c("fieldsample_barcode", levels(var_imp_MFDO3.df$Variable))]),
+             by = "fieldsample_barcode") %>%
+  pivot_longer(names_to = "taxa", values_to = "value", -c(fieldsample_barcode, MFDO_terminus)) %>%
+  group_by(MFDO_terminus, taxa) %>%
+  summarise(value = median(value)) %>%
+  ggplot(aes(x=factor(taxa,
+                      levels=levels(var_imp_MFDO3.df$Variable)),
+             y=factor(MFDO_terminus,
+                      levels=(p$data %>% arrange(y) %>% pull(Label))),
+             fill=value)) +
+  geom_tile(lwd = .25,
+            linetype = 1,
+            color = "black") +
+  scale_fill_viridis_c() +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1),
+        axis.ticks = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+order_terminus_heatmap.plot
+ggsave(order_terminus_heatmap.plot, filename = paste0(results.path, "/order_terminus_heatmap.png"), width = 12, height = 12)
+ggsave(order_terminus_heatmap.plot, filename = paste0(results.path, "/order_terminus_heatmap.svg"), width = 12, height = 12)
+```
+
