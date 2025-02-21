@@ -20,6 +20,10 @@ envs/*
 !envs/snakemake.yml
 !envs/hab_class_r_packages.yml
 
+## Dev folders for local runs
+analysis/input_*
+analysis/output_*
+
 ## Results folder, it will be populated running the scripts
 
 analysis/input/*

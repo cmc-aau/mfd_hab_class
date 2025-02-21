@@ -2,11 +2,11 @@ rule split_table:
     input:
         species_table = config["micro_input"],
     output:
-        genus_table = output_folder + "/input/micro_vars/all_genus.csv",
-        family_table = output_folder + "/input/micro_vars/all_family.csv",
-        order_table = output_folder + "/input/micro_vars/all_order.csv",
-        class_table = output_folder + "/input/micro_vars/all_class.csv",
-        phylum_table = output_folder + "/input/micro_vars/all_phylum.csv",
+        genus_table = output_folder + "/{input_name}/micro_vars/all_genus.csv",
+        family_table = output_folder + "/{input_name}/micro_vars/all_family.csv",
+        order_table = output_folder + "/{input_name}/micro_vars/all_order.csv",
+        class_table = output_folder + "/{input_name}/micro_vars/all_class.csv",
+        phylum_table = output_folder + "/{input_name}/micro_vars/all_phylum.csv",
     conda:
         env_folder + "/hab_class_r_packages.yml"
     resources:
@@ -15,16 +15,17 @@ rule split_table:
         partition = "high-mem",
     shell:
         """
-        scripts/scripts_R/split_table_in_taxa.R --input_table {input.species_table} --out_file {output_folder}"/input/micro_vars/all"
+        mkdir -p "{output_folder}/{input_name}/micro_vars"
+        scripts/scripts_R/split_table_in_taxa.R --input_table {input.species_table} --out_file "{output_folder}/{input_name}/micro_vars/all"
         """
 
 
 rule multicollinearity_filter:
     input:
-        count_table = output_folder + "/input/micro_vars/all_{tax_level}.csv",
+        count_table = output_folder + "/{input_name}/micro_vars/all_{tax_level}.csv",
     output:
-        reduced_table = output_folder + "/input/micro_vars/reduced_{tax_level}.csv",
-        reduced_map = output_folder + "/input/micro_vars/reduced_{tax_level}.RData",
+        reduced_table = output_folder + "/{input_name}/micro_vars/reduced_{tax_level}.csv",
+        reduced_map = output_folder + "/{input_name}/micro_vars/reduced_{tax_level}.RData",
     params:
         n_samples = config["filter_n_samples"],
         threshold = config["filter_threshold"],
@@ -39,6 +40,7 @@ rule multicollinearity_filter:
         20
     shell:
         """
+        mkdir -p "{output_folder}/{input_name}/micro_vars"
         scripts/scripts_R/multicollinearity_filter.R --input_table {input.count_table} --n_samples {params.n_samples} --threshold {params.threshold} --cores {threads} --out_map {output.reduced_map} --out_file {output.reduced_table}
         """
 

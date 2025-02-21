@@ -16,8 +16,8 @@
 
 
 # The script will try to detect the folder where it is using the following line. This might fail depending on the cluster configuration. If this happens the path can be hardcoded (absolute path) and stored as "SCRIPT_DIR"
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-#SCRIPT_DIR="/home/bio.aau.dk/wz65bi/mfd_hab_class/scripts/scripts_bash" # Harcoded path on the cmc cluster
+#SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_DIR="/home/bio.aau.dk/wz65bi/mfd_hab_class/scripts/scripts_bash" # Harcoded path on the cmc cluster
 REPO_DIR=$SCRIPT_DIR/../..
 
 MAMBA_INSTALLATION_DIR=`mamba info | awk '/base environment/{print $4}'`
@@ -41,7 +41,7 @@ if [[ ! -e $ENV_DIR/snakemake ]]; then
 
 fi
 
-mamba activate "$ENV_DIR/snakemake"
+conda activate "$ENV_DIR/snakemake"
 
 snakemake --version
 
