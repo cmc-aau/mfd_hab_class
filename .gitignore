@@ -11,6 +11,7 @@ analysis_legacy/*
 analysis/input/micro_vars_legacy/*
 analysis/output_svm_legacy/*
 config/cluster_hab_class.yaml
+scripts/scripts_R/ensemble_classifier.R
 
 ## Snakemake repo
 .snakemake/*
@@ -23,6 +24,7 @@ envs/*
 ## Dev folders for local runs
 analysis/input_*
 analysis/output_*
+command_lines.txt
 
 ## Results folder, it will be populated running the scripts
 

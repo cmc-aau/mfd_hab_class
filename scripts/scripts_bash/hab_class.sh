@@ -10,7 +10,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=2G
-#SBATCH --time=7-00:00:00
+#SBATCH --time=5-12:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=frde@bio.aau.dk
 
@@ -55,7 +55,7 @@ snakemake --cores 1 --unlock --rerun-incomplete \
         -p --jobs 100 \
         --notemp \
         --rerun-triggers mtime \
-        --use-conda --conda-prefix $ENV_DIR \
+        --use-conda --conda-prefix $ENV_DIR --conda-frontend mamba \
         --configfile $CONFIG_DIR/hab_class.yaml \
         --profile $CONFIG_DIR \
         -s $PYTHON_DIR/hab_class.snakemake
@@ -64,7 +64,7 @@ snakemake --cores 1 --rerun-incomplete \
 	-p --jobs 100 \
 	--notemp \
 	--rerun-triggers mtime \
-	--use-conda --conda-prefix $ENV_DIR \
+	--use-conda --conda-prefix $ENV_DIR --conda-frontend mamba \
 	--configfile $CONFIG_DIR/hab_class.yaml \
 	--profile $CONFIG_DIR \
         -s $PYTHON_DIR/hab_class.snakemake

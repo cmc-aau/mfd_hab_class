@@ -7,21 +7,53 @@ rule hab_class_cv:
     params:
         n_samples = config["hab_n_samples"],
     conda:
-        env_folder + "/hab_class_r_packages.yml"
+        env_folder + "/r_hab_class.yml"
     resources:
-        runtime = "0-06:00:00",
-        mem_mb = "100G",
-        partition = "general",
-        threads = 25,
-    threads:
-        25
+        runtime = "5-12:00:00",
+        mem_mb = "500G",
+        partition = "high-mem",
+        threads = 64,
     shell:
         """
         mkdir -p "{output_folder}/{output_name}"
-        scripts/scripts_R/hab_rand_forest_classifier.R --input_table {input.micro_table} --out_object {output.model_object} --meta {input.meta} --class {wildcards.hab_level} --n_obs {params.n_samples} --threads {threads}
+        scripts/scripts_R/tuning_and_classification.R --input_table {input.micro_table} --out_object {output.model_object} --meta {input.meta} --class {wildcards.hab_level} --n_obs {params.n_samples} --threads {resources.threads}
         """
 
+rule collect_models:
+    input:
+        expand(output_folder + "/" + output_name + "/model_{tax_level}_{hab_level}.RData", tax_level = tax_levels, hab_level = hab_levels),
+    output:
+        metrics = output_folder + "/" + output_name + "/metrics.tsv",
+        classes_tpr = output_folder + "/" + output_name + "/tpr.tsv",
+        classes_prauc = output_folder + "/" + output_name + "/prauc.tsv",
+        var_imp = output_folder + "/" + output_name + "/var_imp.tsv",
+    conda:
+        env_folder + "/r_hab_class.yml",
+    resources:
+        runtime = "00-02:00:00",
+        mem_mb = "500G",
+        partition = "high-mem",
+        threads = 1,
+    shell:
+        """
+        FILE_LIST=`echo {input} | awk -F " " 'BEGIN{{OFS=","}}{{$1=$1; print $0}}'`
+        scripts/scripts_R/collect_tuning.R --input_file $FILE_LIST \
+                                           --metrics_file {output.metrics} \
+                                           --classes_tpr_file {output.classes_tpr} \
+                                           --classes_prauc_file {output.classes_prauc} \
+                                           --var_imp_file {output.var_imp}
+        """
 
-
+rule plot_metrics:
+    input:
+        output_folder + "/" + output_name + "/metrics.tsv",
+    output:
+        output_folder + "/" + output_name + "/metrics_plot.png",
+    conda:
+        env_folder + "/r_hab_class.yml",
+    shell:
+        """
+        scripts/scripts_R/plot_metrics.R --input_file {input} --out_plot "{output_folder}/{output_name}/metrics_plot"
+        """
 
 

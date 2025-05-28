@@ -90,8 +90,8 @@ df.input <- df.input[mfd_db$fieldsample_barcode, ]
 ### Prepare dataframe
 
 mfd.to_model <- df.input %>%
-  scale(center = T, scale = T) %>%
-  as.data.frame() %>%
+  #scale(center = T, scale = T) %>%
+  #as.data.frame() %>%
   mutate(hab_class = as.factor(mfd_db$hab_class))
 
 print(dim(mfd.to_model))
@@ -99,7 +99,8 @@ print(dim(mfd.to_model))
 ### Define imbalanced classes recipe
 
 imbalanced_classes_rec <- recipe(hab_class~., data = mfd.to_model) %>%
-  step_downsample(hab_class)
+  step_downsample(hab_class) %>%
+  step_naomit()
 
 ### Define linear random forest model
 

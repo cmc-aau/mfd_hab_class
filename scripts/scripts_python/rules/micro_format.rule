@@ -32,7 +32,7 @@ rule multicollinearity_filter:
     conda:
         env_folder + "/hab_class_r_packages.yml"
     resources:
-        runtime = "7-00:00:00",
+        runtime = "5-12:00:00",
         mem_mb = "100G",
         partition = "general",
         threads = 20,

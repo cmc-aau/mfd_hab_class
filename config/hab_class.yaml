@@ -5,10 +5,10 @@ micro_input: "/projects/microflora_danica/sub_projects/mfd_abundance_tables/rele
 mfd_metadata: "/home/bio.aau.dk/wz65bi/mfd_hab_class/data/2025-02-19_mfd_db.xlsx"
 
 # Parameters for fitlering
-filter_n_samples: 25
+filter_n_samples: 10 # Run 01,02: 25
 filter_threshold: 0.7
 
 # Parameters for habitat classification
-hab_n_samples: 50
+hab_n_samples: 20 # Run 01,02: 50
 
 
